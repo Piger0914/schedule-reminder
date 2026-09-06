@@ -41,3 +41,24 @@ sent.json 记录已发送，防止重复推送
 
 - 改课表/加倒计时：编辑 `reminder.py` 顶部的 `COURSES`、`COUNTDOWNS`、`ONE_TIME` 等数据。
 - 改触发频率：编辑 `.github/workflows/reminder.yml` 里的 `cron`。
+
+## 维护说明（重要）
+
+**必须用真实的 `git push` 提交代码，不要用 GitHub 网页/API 直接改文件。**
+用 Contents API 或网页编辑创建的提交，GitHub 的**定时调度器（schedule）不会注册**，
+表现为：手动 Run workflow 能成功，但每到 cron 时间点一条都不触发。
+
+### 网络受限时的推送方式（github.com 被墙的情况）
+
+走 SSH over 443，可绕过大部分网络限制：
+
+```bash
+export GIT_SSH_COMMAND="ssh -o HostName=ssh.github.com -o Port=443 \
+  -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519"
+git clone git@github.com:<用户名>/schedule-reminder.git
+```
+
+### 假期
+
+`reminder.py` 里的 `HOLIDAYS` 列表维护法定假期，假期当天不发上课提醒，
+假期前一天 20:00 会推一条假期提醒。每年国务院公布新安排后记得更新。
