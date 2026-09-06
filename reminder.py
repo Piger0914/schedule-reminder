@@ -183,6 +183,16 @@ def prune_state(state, today_str):
 
 # ---------- 主逻辑 ----------
 def main():
+    # 手动触发（workflow_dispatch）时发送测试消息，用于验证链路
+    if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch":
+        ok = send(
+            "🎉 云端课表提醒已上线",
+            "**测试消息**\n\nGitHub Actions 云端提醒已接通 Server酱！\n"
+            "从现在起，不用开电脑也能收到上课提醒、备考倒计时、王者回归提醒了。\n\n"
+            "今晚 22:00 会有第一条平板充电提醒，注意查收～",
+        )
+        print("测试消息发送:", "成功" if ok else "失败")
+        return
     now = datetime.datetime.now(CN)
     today = now.date()
     today_str = today.isoformat()
