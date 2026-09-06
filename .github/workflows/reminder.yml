@@ -1,0 +1,40 @@
+name: 课表提醒
+
+# 触发条件：每 10 分钟一次（UTC），以及支持手动触发测试
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+# 允许提交 sent.json 去重状态
+permissions:
+  contents: write
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 运行提醒脚本
+        env:
+          SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+        run: python reminder.py
+
+      - name: 提交去重状态
+        run: |
+          git config user.name "reminder-bot"
+          git config user.email "bot@users.noreply.github.com"
+          if [ -f sent.json ] && ! git diff --quiet sent.json; then
+            git add sent.json
+            git commit -m "update sent state"
+            git push
+          else
+            echo "sent.json 无变化，跳过提交"
+          fi
