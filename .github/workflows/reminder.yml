@@ -15,7 +15,8 @@ on:
     - cron: '0,10 10 * * *'    # 北京 18:00 / 18:10（考核节点类提醒）
     - cron: '0,10 12 * * *'    # 北京 20:00 / 20:10（期中/假期提醒）
     - cron: '0,10 14 * * *'    # 北京 22:00 / 22:10（充电提醒）
-    - cron: '18,24 8 * * *'    # 【临时】验证定时调度器用，确认后删除
+    # 注意：GitHub 的 schedule 触发在本仓库实测不生效（push / workflow_dispatch 均正常），
+    # 若哪天 schedule 恢复，这些定点时间即为每天的提醒检查时刻。
   push:
     branches: [main]
   workflow_dispatch: {}
