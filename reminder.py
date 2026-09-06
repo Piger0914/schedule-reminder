@@ -85,6 +85,20 @@ def countdown_block(today: datetime.date) -> str:
     lines.append(KAOYAN_NOTE)
     return "\n".join(lines)
 
+# ---------- 假期（国务院 2026 放假安排，学期内部分） ----------
+# 假期期间不发上课提醒；假期前一天 20:00 推一条假期提醒
+HOLIDAYS = [
+    (datetime.date(2026, 9, 25),  datetime.date(2026, 9, 27),  "中秋"),
+    (datetime.date(2026, 10, 1),  datetime.date(2026, 10, 7),  "国庆"),
+]
+
+def holiday_of(d: datetime.date):
+    """返回该日期所在的假期 (起, 止, 名称)，非假期返回 None"""
+    for s, e, name in HOLIDAYS:
+        if s <= d <= e:
+            return (s, e, name)
+    return None
+
 # ---------- 王者回归 ----------
 WZ_TARGET = datetime.date(2026, 10, 7)
 
@@ -203,18 +217,21 @@ def main():
     # 事件列表：(触发时间, 事件ID, 标题, 正文)
     events = []
 
-    # 1) 课程提醒（提前20分钟）
-    for c in courses_on(today):
-        hh, mm = map(int, c["start"].split(":"))
-        start_dt = datetime.datetime(today.year, today.month, today.day, hh, mm, tzinfo=CN)
-        trigger = start_dt - datetime.timedelta(minutes=20)
-        eid = f"course_{c['weekday']}_{c['start'].replace(':', '')}"
-        events.append((trigger, eid, course_title(c), course_body(c, today)))
+    hol_today = holiday_of(today)
 
-    # 2) 充电提醒（周日~周三 22:00，提醒次日）
+    # 1) 课程提醒（提前20分钟）—— 假期期间不提醒
+    if not hol_today:
+        for c in courses_on(today):
+            hh, mm = map(int, c["start"].split(":"))
+            start_dt = datetime.datetime(today.year, today.month, today.day, hh, mm, tzinfo=CN)
+            trigger = start_dt - datetime.timedelta(minutes=20)
+            eid = f"course_{c['weekday']}_{c['start'].replace(':', '')}"
+            events.append((trigger, eid, course_title(c), course_body(c, today)))
+
+    # 2) 充电提醒（周日~周三 22:00，提醒次日）—— 次日是假期则不提醒
     if today.isoweekday() in (7, 1, 2, 3):
         tomorrow = today + datetime.timedelta(days=1)
-        body = charge_body(tomorrow)
+        body = None if holiday_of(tomorrow) else charge_body(tomorrow)
         if body:
             trigger = datetime.datetime(today.year, today.month, today.day, 22, 0, tzinfo=CN)
             eid = f"charge_{today.isoweekday()}"
@@ -235,6 +252,18 @@ def main():
             trigger = datetime.datetime(today.year, today.month, today.day, hh, mm, tzinfo=CN)
             eid = f"once_{o['date'].isoformat()}_{o['time'].replace(':', '')}"
             events.append((trigger, eid, o["title"], o["body"]))
+
+    # 5) 假期前一天 20:00 提醒
+    for s, e, name in HOLIDAYS:
+        if today == s - datetime.timedelta(days=1):
+            trigger = datetime.datetime(today.year, today.month, today.day, 20, 0, tzinfo=CN)
+            days = (e - s).days + 1
+            body = (
+                f"**明天开始放 {name} 假啦（{s.month}月{s.day}日 ~ {e.month}月{e.day}日，共{days}天）**\n\n"
+                f"假期期间上课提醒已自动关闭，安心休息。\n\n"
+                f"顺手确认一下：假期里有没有要交的作业 / 要准备的考试？"
+            )
+            events.append((trigger, f"holiday_{s.isoformat()}", f"🏖️ {name}假期提醒", body))
 
     # 发送到期且未发过的提醒
     sent_any = False
