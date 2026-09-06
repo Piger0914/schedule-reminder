@@ -19,7 +19,9 @@ from pathlib import Path
 CN = datetime.timezone(datetime.timedelta(hours=8))          # 北京时间 UTC+8
 SENDKEY = os.environ.get("SERVERCHAN_SENDKEY", "").strip()   # 从 GitHub Secrets 注入
 STATE_FILE = Path(__file__).parent / "sent.json"             # 去重状态文件
-WINDOW_MINUTES = 30                                          # 补发窗口（分钟）
+# 补发窗口（分钟）：GitHub 定时任务可能延迟，运行迟到时仍可补发提醒
+WINDOW_COURSE = 25        # 上课提醒：超过 25 分钟说明课已开始，再发没意义
+WINDOW_OTHER  = 180       # 其他提醒（充电/节点/假期）：晚 3 小时内仍有意义
 WEEK1_MONDAY = datetime.date(2026, 8, 31)                    # 第 1 周周一
 
 # ---------- Server酱 推送 ----------
@@ -226,7 +228,7 @@ def main():
             start_dt = datetime.datetime(today.year, today.month, today.day, hh, mm, tzinfo=CN)
             trigger = start_dt - datetime.timedelta(minutes=20)
             eid = f"course_{c['weekday']}_{c['start'].replace(':', '')}"
-            events.append((trigger, eid, course_title(c), course_body(c, today)))
+            events.append((trigger, eid, course_title(c), course_body(c, today), WINDOW_COURSE))
 
     # 2) 充电提醒（周日~周三 22:00，提醒次日）—— 次日是假期则不提醒
     if today.isoweekday() in (7, 1, 2, 3):
@@ -235,7 +237,7 @@ def main():
         if body:
             trigger = datetime.datetime(today.year, today.month, today.day, 22, 0, tzinfo=CN)
             eid = f"charge_{today.isoweekday()}"
-            events.append((trigger, eid, "🔋 平板充电提醒", body))
+            events.append((trigger, eid, "🔋 平板充电提醒", body, WINDOW_OTHER))
 
     # 3) 周重复提醒
     for w in WEEKLY:
@@ -243,7 +245,7 @@ def main():
             hh, mm = map(int, w["time"].split(":"))
             trigger = datetime.datetime(today.year, today.month, today.day, hh, mm, tzinfo=CN)
             eid = f"weekly_{w['weekday']}_{w['time'].replace(':', '')}"
-            events.append((trigger, eid, w["title"], w["body"]))
+            events.append((trigger, eid, w["title"], w["body"], WINDOW_OTHER))
 
     # 4) 一次性提醒
     for o in ONE_TIME:
@@ -251,7 +253,7 @@ def main():
             hh, mm = map(int, o["time"].split(":"))
             trigger = datetime.datetime(today.year, today.month, today.day, hh, mm, tzinfo=CN)
             eid = f"once_{o['date'].isoformat()}_{o['time'].replace(':', '')}"
-            events.append((trigger, eid, o["title"], o["body"]))
+            events.append((trigger, eid, o["title"], o["body"], WINDOW_OTHER))
 
     # 5) 假期前一天 20:00 提醒
     for s, e, name in HOLIDAYS:
@@ -263,13 +265,13 @@ def main():
                 f"假期期间上课提醒已自动关闭，安心休息。\n\n"
                 f"顺手确认一下：假期里有没有要交的作业 / 要准备的考试？"
             )
-            events.append((trigger, f"holiday_{s.isoformat()}", f"🏖️ {name}假期提醒", body))
+            events.append((trigger, f"holiday_{s.isoformat()}", f"🏖️ {name}假期提醒", body, WINDOW_OTHER))
 
     # 发送到期且未发过的提醒
     sent_any = False
-    for trigger, eid, title, body in events:
+    for trigger, eid, title, body, window in events:
         if now >= trigger and not was_sent(state, today_str, eid):
-            if (now - trigger).total_seconds() <= WINDOW_MINUTES * 60:
+            if (now - trigger).total_seconds() <= window * 60:
                 ok = send(title, body)
                 if ok:
                     mark_sent(state, today_str, eid)
